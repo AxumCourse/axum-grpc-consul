@@ -1,0 +1,10 @@
+syntax = "proto3";
+package pb;
+
+message EchoRequest { string message = 1; }
+message EchoResponse {
+  optional string prefix = 1;
+  string message = 2;
+}
+
+service EchoSerivce { rpc Echo(EchoRequest) returns (EchoResponse); }
