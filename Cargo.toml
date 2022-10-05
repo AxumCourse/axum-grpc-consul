@@ -14,6 +14,8 @@ prost = "0.11"
 tonic = "0.8"
 axum = "0.5"
 serde = { version="1", features = ["derive"] }
+reqwest = { version = "0.11", features = ["json"] }
+urlencoding = "2"
 
 [build-dependencies]
 tonic-build = "0.8"
