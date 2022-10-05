@@ -1,15 +1,43 @@
 use axum::{response::Html, Form};
-use axum_grpc_consul::pb;
+use axum_grpc_consul::{consul_api, pb};
 use serde::Deserialize;
 
 #[tokio::main]
 async fn main() {
     let addr = "0.0.0.0:29527";
+    tokio::spawn(register(addr));
+
     let app = axum::Router::new().route("/echo", axum::routing::get(echo_ui).post(echo));
     axum::Server::bind(&addr.parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();
+}
+
+async fn register(addr: &str) {
+    println!("正在注册服务");
+    let addrs: Vec<&str> = addr.split(":").collect();
+    let addr = addrs[0];
+    let port: i32 = addrs[1].parse().unwrap();
+    let opt = consul_api::ConsulOption::default();
+    let cs = consul_api::Consul::new(opt).unwrap();
+    let reg = consul_api::Registration::simple("echo-web", addr, port);
+    cs.register(&reg).await.unwrap();
+    println!("服务注册成功");
+}
+async fn discovery(service_id: &str) -> Result<String, String> {
+    println!("正在发现服务 {}", service_id);
+    let opt = consul_api::ConsulOption::default();
+    let cs = consul_api::Consul::new(opt).unwrap();
+    let filter = consul_api::Filter::ID(service_id.into());
+    let srv = cs
+        .get_service(&filter)
+        .await
+        .map_err(|err| err.to_string())?;
+    if let Some(srv) = srv {
+        return Ok(format!("http://{}:{}", srv.address, srv.port));
+    }
+    Err("没有发现指定的服务".to_string())
 }
 
 async fn echo_ui() -> Html<&'static str> {
@@ -63,7 +91,7 @@ struct EchoInput {
     pub message: String,
 }
 async fn echo(Form(EchoInput { message }): Form<EchoInput>) -> Result<Html<String>, String> {
-    let echo_srv_addr = "http://127.0.0.1:19527";
+    let echo_srv_addr = discovery("echo-srv").await?;
     let mut client = pb::echo_serivce_client::EchoSerivceClient::connect(echo_srv_addr)
         .await
         .map_err(|err| err.to_string())?;
